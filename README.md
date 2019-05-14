@@ -10,7 +10,7 @@ FSM Diagram Generator for Xilinx Vivado HLS
 
 This is a simple Python3 script to convert the report generated from Vivado containing the resulting RTL FSM to a Graphviz format that can be converted to a human-readable image (e.g. PNG).
 
-This script also performs simplification on the FSM, merging states that are part of long-latency processes (e.g. global memory loads/stores).
+This script also performs simplification on the FSM, merging states that are part of long-latency processes (e.g. global memory loads/stores) to improve readability.
 
 ![Example](examples/mvt.png)
 
@@ -118,7 +118,7 @@ The script here presented parses the FSM description and generates the nodes and
 
 ## Graph Simplification
 
-The generated FSM escalate in size very easily, having thousands of nodes. Sometimes several nodes are inserted to resolve a multi-cycle operation (e.g. loading/storing on DDR3 memory). These operations are usually represented by a long chain of sequential states that are always executed when started. In other words, if the FSM enters the first state of this long chain, it will always execute all the states in the chain until the operation is finished.
+The generated FSM escalate in size very easily, having thousands of nodes. Sometimes several nodes are inserted to resolve a multi-cycle operation (e.g. loading/storing on DDR3 memory). These operations are usually represented by a long chain of sequential states that are always executed when started. In other words, if the FSM enters the first state of this long chain, it will always execute all the states in the chain until the operation is finished (similar to a basic block).
 
 The FSMGen script simplifies such nodes, grouping them as a supernode. These nodes are represented with a label ```X-Y```, where ```X``` is the entering node and ```Y``` the exiting node. Simplification is only performed when there are no branchs in the middle of the chain and when the chain is sequentially numbered (e.g. a supernode ```10-15``` mandatorily includes nodes ```10```, ```11```, ```12```, ```13```, ```14``` and ```15```).
 
