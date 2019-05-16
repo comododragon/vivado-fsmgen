@@ -48,23 +48,36 @@ if "__main__" == __name__:
 	dotFile = sys.argv[2]
 
 	with open(rptFile, "r") as inF, open(dotFile, "w") as outF:
-		currentNode = -1
+		currentNode = -2
+		endNodeID = None
 		nodeRegex = re.compile("(\\d+) --> \n")
 		edgeRegex = re.compile("\t(\\d+)[ ]*/ (.*)")
+		endNodeRegex = re.compile("ST_(\\d+) : .*\"ret void\".*<Predicate = (.*)> <Delay.*")
 
 		G = nx.DiGraph()
 
 		for line in inF:
-			if -1 == currentNode:
+			# Searching for beginning of FSM
+			if -2 == currentNode:
 				if "* FSM state transitions: \n" == line:
 					currentNode = 0
+			# End of FSM, searching for end node
+			elif -1 == currentNode:
+				endNodeMatch = endNodeRegex.match(line)
+				# End node found, add it and the incoming edge
+				if endNodeMatch is not None:
+					endNodeID = str(len(G.nodes()) + 1)
+					G.add_node(endNodeID, label="end")
+					G.add_edge(str(endNodeMatch.group(1)), endNodeID, label=endNodeMatch.group(2))
+					break
+			# Inside FSM
 			else:
 				# FSM states were already found, if the header is found again, this is unexpected
 				if "* FSM state transitions: \n" == line:
 					raise RuntimeError("Input file is corrupt")
-				# This indicates the end of the FSM. Break.
+				# This indicates the end of the FSM. Will search for end node now.
 				elif "* FSM state operations: \n" == line:
-					break
+					currentNode = -1
 
 				nodeMatch = nodeRegex.match(line)
 				# A node description was detected, create this node
@@ -89,22 +102,18 @@ if "__main__" == __name__:
 			ipStr = str(i + 1)
 
 			if G.has_node(iStr):
-				# If this is the last node, select "SIMPLIFICATION FLUSH" state
-				if origNodes == i + 1:
-					state = 2
+				# Simplification sequence is empty
+				if 0 == len(sequence):
+					# If simplification sequence is empty, current node has only one incoming and one outcoming edge and the next edge is i + 1, change to "START SIMPLIFICATION" state
+					if (1 == G.in_degree(iStr)) and (1 == G.out_degree(iStr)) and G.has_edge(iStr, ipStr):
+						state = 1
 				else:
-					# Simplification sequence is empty
-					if 0 == len(sequence):
-						# If simplification sequence is empty, current node has only one incoming and one outcoming edge and the next edge is i + 1, change to "START SIMPLIFICATION" state
-						if (1 == G.in_degree(iStr)) and (1 == G.out_degree(iStr)) and G.has_edge(iStr, ipStr):
-							state = 1
+					# Simplification sequence is not empty, if this node has only one incoming and one outcoming edge, add this node to simplification
+					if (1 == G.in_degree(iStr)) and (1 == G.out_degree(iStr)):# and G.has_edge(iStr, ipStr):
+						state = 1
+					# Else, finish simplification ("SIMPLIFICATION FLUSH" state)
 					else:
-						# Simplification sequence is not empty, if this node has only one incoming and one outcoming edge, add this node to simplification
-						if (1 == G.in_degree(iStr)) and (1 == G.out_degree(iStr)):# and G.has_edge(iStr, ipStr):
-							state = 1
-						# Else, finish simplification ("SIMPLIFICATION FLUSH" state)
-						else:
-							state = 2
+						state = 2
 
 				# State 1: START SIMPLIFICATION
 				if 1 == state:
@@ -164,7 +173,11 @@ if "__main__" == __name__:
 
 		# Write nodes
 		for n in G.nodes(data=True):
-			outF.write("\tn{} [shape=record,label=\"{}\"];\n".format(n[0], n[1]["label"]))
+			# Special treatment for end node
+			if endNodeID == n[0]:
+				outF.write("\tn{} [label=\"{}\"];\n".format(n[0], n[1]["label"]))
+			else:
+				outF.write("\tn{} [shape=record,label=\"{}\"];\n".format(n[0], n[1]["label"]))
 
 		# Write edges
 		for e in G.edges(data=True):

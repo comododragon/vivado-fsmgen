@@ -20,6 +20,7 @@ digraph "FSM" {
 	n1269 [shape=record,label="1269"];
 	n1136 [shape=record,label="1136"];
 	n1268 [shape=record,label="1268"];
+	n1270 [label="end"];
 	n1to2 [shape=record,label="1-2"];
 	n6to138 [shape=record,label="6-138"];
 	n142to274 [shape=record,label="142-274"];
@@ -29,6 +30,7 @@ digraph "FSM" {
 	n1002to1132 [shape=record,label="1002-1132"];
 	n1137to1267 [shape=record,label="1137-1267"];
 	n3 -> n4 [label="(!exitcond_flatten)"];
+	n3 -> n1270 [label="(exitcond_flatten)"];
 	n4 -> n5;
 	n5 -> n139 [label="(!exitcond8 & !tmp_31)"];
 	n5 -> n141 [label="(exitcond8)"];
