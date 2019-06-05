@@ -96,9 +96,11 @@ if "__main__" == __name__:
 		sequence = []
 		origNodes = len(G.nodes())
 		# Iterate through all nodes (we are assuming that the FSM flows through the states in a crescent manner)
-		for i in range(1, origNodes + 1):
+		i = 0
+		while i <= origNodes:
 			state = 0
 			iStr = str(i)
+			imStr = None if 0 == i else str(i - 1)
 			ipStr = str(i + 1)
 
 			if G.has_node(iStr):
@@ -109,7 +111,7 @@ if "__main__" == __name__:
 						state = 1
 				else:
 					# Simplification sequence is not empty, if this node has only one incoming and one outcoming edge, add this node to simplification
-					if (1 == G.in_degree(iStr)) and (1 == G.out_degree(iStr)):# and G.has_edge(iStr, ipStr):
+					if (1 == G.in_degree(iStr)) and (1 == G.out_degree(iStr)) and G.has_edge(imStr, iStr):
 						state = 1
 					# Else, finish simplification ("SIMPLIFICATION FLUSH" state)
 					else:
@@ -164,6 +166,11 @@ if "__main__" == __name__:
 
 					# Clean simplification list
 					sequence = []
+
+					# Re-visit this node
+					i = i - 1
+
+			i = i + 1
 
 		# Your work is done root node, farewell :')
 		G.remove_node(str(0))
