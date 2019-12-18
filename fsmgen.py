@@ -100,7 +100,6 @@ if "__main__" == __name__:
 	#
 	# NOTE: To avoid confusing grouping of operations, you must create enough groups to
 	#       ensure that each operation is uniquely identifiable
-	# Gerar dois projectos de banking diferentes, baseados no rw-add2-np: um usando arrays completamente ortogonais para leitura, e outro usando indices diferentes do que >> 1 (eu acho que pode ta rolando um burst nao intencional ali)
 	filters = {
 		"ddr": [
 			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*=.*@_ssdm_op_(ReadReq).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^ ]+), i\d+ ([^ ]+)\).*"), [0, 1, None, 2, 3]),

@@ -46,6 +46,8 @@ $ python3 fsmgen.py /path/to/PROJ.verbose.sched.rpt PROJ.dot
 $ dot -Tpng PROJ.dot PROJ.png
 ```
 
+***Please run fsmgen.py --help for more information about the command line!***
+
 ## The Report File
 
 When using Vivado HLS, the internal command ```csynth_design``` generates the RTL and also lots of report files. The file ```PROJ.verbose.sched.rpt``` (where ```PROJ``` is the name of your Vivado project) contains significant information about the HLS scheduling, including latency estimation, the generated FSM and how the LLVM IR instructions were allocated to the FSM states.
@@ -128,7 +130,7 @@ The FSMGen script simplifies such nodes, grouping them as a supernode. These nod
 
 ## Operation Filtering and Printing
 
-In order to explore certain aspects of the generated FSM, FSMGen can print in the graph LLVM IR operations through selected filters. You can use this feature through the ```-f FILTER``` argument. Supported features for now:
+In order to explore certain aspects of the generated FSM, FSMGen can print LLVM IR operations in the graph through selected filters. You can use this feature through the ```-f FILTER``` argument. Supported filters for now:
 
 * ```ddr```: operations related to off-chip access;
 * ```float```: floating-point arithmetic.
@@ -142,7 +144,7 @@ $ python3 fsmgen.py -f ddr -f float input.rpt output.dot
 
 Also, you can ask FSMGen to save the filtered operations to a CSV file using the ```-c FILE``` argument:
 ```
-$ python3 fsmgen.py -c output.csv input.rpt output.dot
+$ python3 fsmgen.py -f ddr -c output.csv input.rpt output.dot
 ```
 
 ## Examples
