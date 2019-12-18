@@ -33,19 +33,91 @@
 
 
 import networkx as nx
-import re, sys
+import getopt, re, sys
+
+
+# Print this tool's usage
+def printUsage(printToError=False):
+	usageStr = (
+		"Usage: {} [OPTION]... RPTFILE DOTFILE\n"
+		"  where:\n"
+		"    [OPTION]...: one or more of the following:\n"
+		"      -h, --help                  this message\n"
+		"      -f FILTER, --filter=FILTER  show together with the graph some operations of interest:\n"
+		"                                    ddr    show DDR transactions\n"
+		"                                    float  show floating-point transactions\n"
+		"                                  NOTE: you can repeat this argument\n"
+		"      -c CSV   , --csv=CSV        save filtered operations to a csv file with name CSV\n".format(sys.argv[0])
+	)
+
+	if printToError:
+		sys.stderr.write("{}\n".format(usageStr))
+	else:
+		print(usageStr)
 
 
 if "__main__" == __name__:
-	if len(sys.argv) != 3:
-		sys.stderr.write("Usage: {} RPTFILE DOTFILE\n".format(sys.argv[0]))
-		sys.stderr.write("  where:\n")
-		sys.stderr.write("    RPTFILE: generated *.verbose.sched.rpt file\n")
-		sys.stderr.write("    DOTFILE: output dot file\n")
+	rptFile = None
+	dotFile = None
+	activeFilters = []
+	csvFile = None
+
+	if len(sys.argv) < 3:
+		printUsage()
 		exit(1)
 
-	rptFile = sys.argv[1]
-	dotFile = sys.argv[2]
+	# Get command line options
+	opts, args = getopt.getopt(sys.argv[1:-2], "f:c:h", ["filter=", "csv=", "help"])
+
+	# Parse command line options
+	for o, a in opts:
+		if o in ("-f", "--filter"):
+			activeFilters.append(a) 
+		elif o in ("-c", "--csv"):
+			csvFile = a
+		else:
+			printUsage()
+			exit(1)
+
+	rptFile = sys.argv[-2]
+	dotFile = sys.argv[-1]
+
+	# Filters. Interesting information should be saved using groups (with parentheses)
+	#
+	# The first group is always allocated to the whole match
+	# The second group in this case should isolate the state number (i.e. ST_(\d+))
+	# All remaining groups are user-defined and used to show the information on the graph
+	# Each filter is composed of one or more tuples. Each tuple is composed of one compiled
+	# regex (following the recommendations above) and one array for group reordering.
+	# Apart from the first two groups that are reserved, the remaining groups can be reordered
+	# to make the information readable. Separators can be created with None
+	# If no reordering is required, simply pass None
+	#
+	# Example:
+	# Let's say that the regex matched to the following groups (including the reserved values): [8, 164, %foo, 5]
+	# Using a reordering vector of [1, None, None, 0], the final vector will be [8, 164, 5, ---, ---, %foo]
+	# Note that the index elements from the reorder vector consider position 0 as the first non-reserved group
+	#
+	# NOTE: To avoid confusing grouping of operations, you must create enough groups to
+	#       ensure that each operation is uniquely identifiable
+	# Gerar dois projectos de banking diferentes, baseados no rw-add2-np: um usando arrays completamente ortogonais para leitura, e outro usando indices diferentes do que >> 1 (eu acho que pode ta rolando um burst nao intencional ali)
+	filters = {
+		"ddr": [
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*=.*@_ssdm_op_(ReadReq).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^ ]+), i\d+ ([^ ]+)\).*"), [0, 1, None, 2, 3]),
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*=.*@_ssdm_op_(Read).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^\)]+)\).*"), [1, 2, 0, 3, None]),
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*=.*@_ssdm_op_(WriteReq).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^ ]+), i\d+ ([^ ]+)\).*"), [0, 1, None, 2, 3]),
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*@_ssdm_op_(Write).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^ ]+), i\d+ ([^ ]+), i\d+ ([^ ]+)\).*"), None),
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*=.*@_ssdm_op_(WriteResp).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^\)]+)\).*"), [1, 2, 0, 3, None])
+		],
+		"float": [
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*= (fadd|fsub|fmul|fdiv) [^ ]+ ([^ ]+), ([^ ]+)\".*"), [1, None, 0, 2, 3])
+		]
+	}
+
+	# Sanity check
+	for activeFilter in activeFilters:
+		if activeFilter not in filters:
+			raise RuntimeError("Unknown filter requested: {}".format(activeFilter))
 
 	with open(rptFile, "r") as inF, open(dotFile, "w") as outF:
 		currentNode = -2
@@ -55,27 +127,51 @@ if "__main__" == __name__:
 		endNodeRegex = re.compile("ST_(\\d+) : .*\"ret void\".*<Predicate = (.*)> <Delay.*")
 
 		G = nx.DiGraph()
+		filteredLines = {}
 
 		for line in inF:
 			# Searching for beginning of FSM
 			if -2 == currentNode:
 				if "* FSM state transitions: \n" == line:
 					currentNode = 0
-			# End of FSM, searching for end node
+			# End of FSM, searching for end node and also nodes of interest
 			elif -1 == currentNode:
+				# If we reached the end of the operation list, we stop
+				if "============================================================\n" == line:
+					break
+
+				# First, we search for end node
 				endNodeMatch = endNodeRegex.match(line)
 				# End node found, add it and the incoming edge
 				if endNodeMatch is not None:
 					endNodeID = str(len(G.nodes()) + 1)
 					G.add_node(endNodeID, label="end")
 					G.add_edge(str(endNodeMatch.group(1)), endNodeID, label=endNodeMatch.group(2))
-					break
+
+				# Now, we search for active filters (if any)
+				for activeFilterSet in activeFilters:
+					for activeFilter in filters[activeFilterSet]:
+						filterMatch = activeFilter[0].match(line)
+						# Filter matched, we save the groups for later use
+						if filterMatch is not None:
+							stateNo = int(filterMatch[1])
+							if stateNo not in filteredLines:
+								filteredLines[stateNo] = []
+
+							# If reordering vector is supplied, we reorder the group
+							if activeFilter[1] is None:
+								filteredLines[stateNo].append(filterMatch.groups()[1:])
+							else:
+								reorderedMatch = [filterMatch.group(2)]
+								for relem in activeFilter[1]:
+									reorderedMatch.append("---" if relem is None else filterMatch.group(relem + 3))
+								filteredLines[stateNo].append(tuple(reorderedMatch))
 			# Inside FSM
 			else:
 				# FSM states were already found, if the header is found again, this is unexpected
 				if "* FSM state transitions: \n" == line:
 					raise RuntimeError("Input file is corrupt")
-				# This indicates the end of the FSM. Will search for end node now.
+				# This indicates the end of the FSM. Will proceed to the next search now
 				elif "* FSM state operations: \n" == line:
 					currentNode = -1
 
@@ -176,7 +272,13 @@ if "__main__" == __name__:
 		G.remove_node(str(0))
 
 		# Write .dot header
-		outF.write("digraph \"FSM\" {\n")
+		outF.write("digraph \"FSM\" {\n\tgraph [fontname = \"monospace\"];\n\tnode [fontname = \"monospace\"];\n\tedge [fontname = \"monospace\"];\n\n")
+
+		digitsInNoOfNodes = len(str(len(G)))
+		noOfDigitsInState = len(str(origNodes - 1))
+		formatStrSingle = "\\l{}(state {{:0{}}}) ".format(" " * (4 + noOfDigitsInState), noOfDigitsInState)
+		formatStrSuper = "\\l(states {{:0{}}} - {{:0{}}}) ".format(noOfDigitsInState, noOfDigitsInState)
+		csvBody = ""
 
 		# Write nodes
 		for n in G.nodes(data=True):
@@ -184,7 +286,59 @@ if "__main__" == __name__:
 			if endNodeID == n[0]:
 				outF.write("\tn{} [label=\"{}\"];\n".format(n[0], n[1]["label"]))
 			else:
-				outF.write("\tn{} [shape=record,label=\"{}\"];\n".format(n[0], n[1]["label"]))
+				label = n[1]["label"]
+				interval = list(map(lambda x: int(x), n[0].split("to")))
+
+				if csvFile is not None:
+					csvBody += "{}\n".format(n[1]["label"])
+
+				# If there are filtered lines, we should print them as well
+				mergedFilteredLines = {}
+				for i in range(interval[0], (interval[1] if 2 == len(interval) else interval[0]) + 1):
+					if i in filteredLines:
+						filteredLines2 = filteredLines[i]
+
+						# Check for mergeable lines
+						for filteredLine in filteredLines2:
+							hasMerged = False
+
+							for mergedIdx in mergedFilteredLines:
+								for mergedLine in mergedFilteredLines[mergedIdx]:
+									# We merge only if the list of operations is exactly the same and if there is continuity on the node count
+									if mergedLine[1] == filteredLine and (mergedLine[0] + 1) == i:
+										mergedLine[0] += 1
+										hasMerged = True
+										break
+
+							# If no merge happened, we create a new element for this [super-]node
+							if not hasMerged:
+								if i not in mergedFilteredLines:
+									mergedFilteredLines[i] = []
+								mergedFilteredLines[i].append([i, filteredLine])
+
+				for mergedIdx in mergedFilteredLines:
+					for mergedLine in mergedFilteredLines[mergedIdx]:
+						# Transaction not merged
+						if mergedIdx == mergedLine[0]:
+							# I apologise for this next line
+							label += formatStrSingle.format(mergedIdx)
+							if csvFile is not None:
+								csvBody += "---,{},".format(mergedIdx)
+						# Transaction merged
+						else:
+							label += formatStrSuper.format(mergedIdx, mergedLine[0])
+							if csvFile is not None:
+								csvBody += "{},{},".format(mergedIdx, mergedLine[0])
+
+						label += ", ".join(mergedLine[1])
+						if csvFile is not None:
+							csvBody += ",".join(mergedLine[1])
+							csvBody += "\n"
+
+				if csvFile is not None:
+					csvBody += "\n\n\n"
+
+				outF.write("\tn{} [shape=record,label=\"{}\\l\"];\n".format(n[0], label))
 
 		# Write edges
 		for e in G.edges(data=True):
@@ -195,3 +349,8 @@ if "__main__" == __name__:
 
 		# Finish .dot file
 		outF.write("}\n")
+
+		# Write csv file if applicable
+		if csvFile is not None:
+			with open(csvFile, "w") as csvF:
+				csvF.write(csvBody)
