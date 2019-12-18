@@ -14,6 +14,10 @@ This script also performs simplification on the FSM, merging states that are par
 
 ![Example](examples/mvt.png)
 
+It can also filter some operations of the generated FSM and print it out on the graph or on a separate CSV file.
+
+![Example2](examples/test.png)
+
 ## Licence
 
 BSD-3-Clause Licence. See LICENSE.TXT for details.
@@ -121,6 +125,25 @@ The script here presented parses the FSM description and generates the nodes and
 The generated FSM escalate in size very easily, having thousands of nodes. Sometimes several nodes are inserted to resolve a multi-cycle operation (e.g. loading/storing on DDR3 memory). These operations are usually represented by a long chain of sequential states that are always executed when started. In other words, if the FSM enters the first state of this long chain, it will always execute all the states in the chain until the operation is finished (similar to a basic block).
 
 The FSMGen script simplifies such nodes, grouping them as a supernode. These nodes are represented with a label ```X-Y```, where ```X``` is the entering node and ```Y``` the exiting node. Simplification is only performed when there are no branchs in the middle of the chain and when the chain is sequentially numbered (e.g. a supernode ```10-15``` mandatorily includes nodes ```10```, ```11```, ```12```, ```13```, ```14``` and ```15```).
+
+## Operation Filtering and Printing
+
+In order to explore certain aspects of the generated FSM, FSMGen can print in the graph LLVM IR operations through selected filters. You can use this feature through the ```-f FILTER``` argument. Supported features for now:
+
+* ```ddr```: operations related to off-chip access;
+* ```float```: floating-point arithmetic.
+
+Refer to the big comment at the source file for more information on how to implement your own filter.
+
+Example of execution using both filters:
+```
+$ python3 fsmgen.py -f ddr -f float input.rpt output.dot
+```
+
+Also, you can ask FSMGen to save the filtered operations to a CSV file using the ```-c FILE``` argument:
+```
+$ python3 fsmgen.py -c output.csv input.rpt output.dot
+```
 
 ## Examples
 
