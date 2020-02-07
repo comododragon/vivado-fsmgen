@@ -109,7 +109,7 @@ if "__main__" == __name__:
 			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*=.*@_ssdm_op_(WriteResp).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^\)]+)\).*"), [1, 2, 0, 3, None])
 		],
 		"float": [
-			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*= (fadd|fsub|fmul|fdiv) [^ ]+ ([^ ]+), ([^ ]+)\".*"), [1, None, 0, 2, 3])
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*= (fadd|fsub|fmul|fdiv) [^ ]+ ([^ ]+), ([^ ,\"]+).*"), [1, None, 0, 2, 3])
 		]
 	}
 
