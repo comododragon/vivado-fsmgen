@@ -12,11 +12,11 @@ This is a simple Python3 script to convert the report generated from Vivado cont
 
 This script also performs simplification on the FSM, merging states that are part of long-latency processes (e.g. global memory loads/stores) to improve readability.
 
-![Example](examples/mvt.png)
+![Example](examples/fsmgen/mvt.png)
 
 It can also filter some operations of the generated FSM and print it out on the graph or on a separate CSV file.
 
-![Example2](examples/test.png)
+![Example2](examples/fsmgen/test.png)
 
 Additionally, there is a script to generate a pipeline timeline (pipelook.py). Instructions on how to use it coming soon!
 
