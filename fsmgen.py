@@ -32,6 +32,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+import json
 import networkx as nx
 import getopt, re, sys
 
@@ -42,12 +43,14 @@ def printUsage(printToError=False):
 		"Usage: {} [OPTION]... RPTFILE DOTFILE\n"
 		"  where:\n"
 		"    [OPTION]...: one or more of the following:\n"
-		"      -h, --help                  this message\n"
+		"      -h       , --help           this message\n"
 		"      -f FILTER, --filter=FILTER  show together with the graph some operations of interest:\n"
 		"                                    ddr    show DDR transactions\n"
 		"                                    float  show floating-point transactions\n"
+		"                                    bram   show BRAM load/stores\n"
 		"                                  NOTE: you can repeat this argument\n"
-		"      -c CSV   , --csv=CSV        save filtered operations to a csv file with name CSV\n".format(sys.argv[0])
+		"      -c CSV   , --csv=CSV        save filtered operations to a csv file with name CSV\n"
+		"      -j JSON  , --json=JSON      generate json file JSON to be used by \"pipelook\"n".format(sys.argv[0])
 	)
 
 	if printToError:
@@ -61,13 +64,15 @@ if "__main__" == __name__:
 	dotFile = None
 	activeFilters = []
 	csvFile = None
+	jsonFile = None
+	fsmDict = {}
 
 	if len(sys.argv) < 3:
 		printUsage()
 		exit(1)
 
 	# Get command line options
-	opts, args = getopt.getopt(sys.argv[1:-2], "f:c:h", ["filter=", "csv=", "help"])
+	opts, args = getopt.getopt(sys.argv[1:-2], "f:c:j:h", ["filter=", "csv=", "json=", "help"])
 
 	# Parse command line options
 	for o, a in opts:
@@ -75,6 +80,8 @@ if "__main__" == __name__:
 			activeFilters.append(a) 
 		elif o in ("-c", "--csv"):
 			csvFile = a
+		elif o in ("-j", "--json"):
+			jsonFile = a
 		else:
 			printUsage()
 			exit(1)
@@ -100,6 +107,7 @@ if "__main__" == __name__:
 	#
 	# NOTE: To avoid confusing grouping of operations, you must create enough groups to
 	#       ensure that each operation is uniquely identifiable
+	# Gerar dois projectos de banking diferentes, baseados no rw-add2-np: um usando arrays completamente ortogonais para leitura, e outro usando indices diferentes do que >> 1 (eu acho que pode ta rolando um burst nao intencional ali)
 	filters = {
 		"ddr": [
 			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*=.*@_ssdm_op_(ReadReq).m_axi.i(\d+)P\(i\d+ addrspace\(1\)\* ([^ ]+), i\d+ ([^ ]+)\).*"), [0, 1, None, 2, 3]),
@@ -110,6 +118,10 @@ if "__main__" == __name__:
 		],
 		"float": [
 			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+).*= (fadd|fsub|fmul|fdiv) [^ ]+ ([^ ]+), ([^ ,\"]+).*"), [1, None, 0, 2, 3])
+		],
+		"bram": [
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"([^ ]+) += +(load) +([^ ]+) +([^ ]+),.*"), [1, 2, 0, 3, None]),
+			(re.compile(r"ST_(\d+) : Operation \d+ \[\d+/(\d+)\].*--->.*\"(store) +([^ ]+) +([^ ]+), +[^ ]+ +([^ ]+),.*"), [0, 1, 3, 2, None]),
 		]
 	}
 
@@ -313,9 +325,13 @@ if "__main__" == __name__:
 							if not hasMerged:
 								if i not in mergedFilteredLines:
 									mergedFilteredLines[i] = []
+
 								mergedFilteredLines[i].append([i, filteredLine])
 
 				for mergedIdx in mergedFilteredLines:
+					if jsonFile is not None:
+						fsmDict[interval[0]] = mergedFilteredLines
+
 					for mergedLine in mergedFilteredLines[mergedIdx]:
 						# Transaction not merged
 						if mergedIdx == mergedLine[0]:
@@ -353,3 +369,8 @@ if "__main__" == __name__:
 		if csvFile is not None:
 			with open(csvFile, "w") as csvF:
 				csvF.write(csvBody)
+
+		# Write json file if applicable
+		if jsonFile is not None:
+			with open(jsonFile, "w") as jsonF:
+				jsonF.write(json.dumps(fsmDict, indent=2))

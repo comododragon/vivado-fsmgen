@@ -18,6 +18,8 @@ It can also filter some operations of the generated FSM and print it out on the 
 
 ![Example2](examples/test.png)
 
+Additionally, there is a script to generate a pipeline timeline (pipelook.py). Instructions on how to use it coming soon!
+
 ## Licence
 
 BSD-3-Clause Licence. See LICENSE.TXT for details.
